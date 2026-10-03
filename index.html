@@ -1,0 +1,1157 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><title>Cluster Conquest</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<title>Cluster Conquest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<style>
+/* Layout: war-table — the map is the hero; command sidebar right; console + event ledger beneath. Single dark look on purpose (a game board at night). */
+:root {
+  --ink: #0a1022;
+  --panel: #111a33;
+  --panel-2: #172242;
+  --line: #2a3866;
+  --brass: #e8b53c;
+  --brass-dim: #9c7a2a;
+  --parch: #f2efe6;
+  --muted: #9aa6c4;
+  --ok: #8fe08a;
+  --warn: #f0a24a;
+  --bad: #ff7a7a;
+  --t-web: #e0474f; --t-api: #4c8cf0; --t-db: #e8b53c; --t-4: #b072e8; --t-5: #3fc6a8; --t-6: #f07ac0;
+  --f-display: "Silkscreen", "JetBrains Mono", monospace;
+  --f-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --f-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--ink); color: var(--parch); }
+body { font-family: var(--f-body); font-size: 14px; line-height: 1.5; padding-inline: 16px; padding-block: 14px 28px; }
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.wrap { max-width: 1440px; margin: 0 auto; display: grid; gap: 14px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; justify-content: space-between; }
+.brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.brand h1 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3.2vw, 34px); letter-spacing: .04em; color: var(--brass); text-shadow: 3px 3px 0 #05070f; line-height: 1; }
+.brand p { margin: 0; color: var(--muted); font-size: 14px; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.chip { border: 1px solid var(--line); background: var(--panel); padding: 4px 10px; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.chip b { color: var(--parch); font-weight: 700; }
+.chip span { color: var(--muted); }
+.chip.ok b { color: var(--ok); } .chip.bad b { color: var(--bad); } .chip.warn b { color: var(--warn); }
+.iconbtn { cursor: pointer; }
+
+/* frame */
+.frame { border: 3px solid var(--brass); box-shadow: inset 0 0 0 4px var(--ink), inset 0 0 0 5px var(--brass-dim), 6px 6px 0 #05070f; background: var(--panel); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 14px; align-items: start; }
+@media (max-width: 1020px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.leftcol { display: grid; gap: 14px; min-width: 0; }
+@media (max-width: 600px) { .hint { display: none; } }
+
+.mapbox { position: relative; padding: 9px; }
+#map { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; image-rendering: pixelated; cursor: pointer; background: #0e1a3a; max-width: 100%; }
+.hint { position: absolute; display: block; left: 20px; bottom: 18px; font-family: var(--f-mono); font-size: 11.5px; color: var(--parch); background: rgba(10,16,34,.78); padding: 3px 8px; border: 1px solid var(--line); pointer-events: none; }
+
+.orders { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 9px 10px; }
+.btn { cursor: pointer; border: 2px solid var(--line); background: var(--panel-2); padding: 7px 12px; font-weight: 700; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 3px 3px 0 #05070f; transition: transform .08s, border-color .15s; }
+.btn:hover { border-color: var(--brass); }
+.btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #05070f; }
+.btn .k { font-family: var(--f-mono); font-size: 11px; color: var(--muted); font-weight: 400; }
+.btn.danger { border-color: #6a2a34; } .btn.danger:hover { border-color: var(--bad); }
+.btn.on { border-color: var(--ok); color: var(--ok); }
+.btn[disabled] { opacity: .4; cursor: not-allowed; }
+.btn.sm { padding: 4px 9px; font-size: 12.5px; box-shadow: 2px 2px 0 #05070f; }
+
+/* side */
+.side { display: grid; gap: 14px; min-width: 0; }
+.card { padding: 14px 16px 16px; display: grid; gap: 10px; min-width: 0; }
+.card h2 { margin: 0; font-family: var(--f-display); font-size: 15px; letter-spacing: .06em; color: var(--brass); font-weight: 700; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card h2 small { font-family: var(--f-mono); font-size: 11px; color: var(--muted); letter-spacing: 0; font-weight: 400; }
+.pill { font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border: 1px solid currentColor; font-weight: 700; letter-spacing: .02em; }
+.pill.ok { color: var(--ok); } .pill.bad { color: var(--bad); } .pill.warn { color: var(--warn); } .pill.mute { color: var(--muted); }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; }
+.bar { height: 10px; background: #0b1328; border: 1px solid var(--line); position: relative; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--brass); }
+.podgrid { display: flex; flex-wrap: wrap; gap: 4px; min-height: 18px; }
+.podgrid span { width: 14px; height: 14px; border: 1px solid #05070f; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* scheduler */
+.sched-pod { font-family: var(--f-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.phase { display: flex; gap: 4px; font-family: var(--f-mono); font-size: 10.5px; }
+.phase span { flex: 1; text-align: center; padding: 2px 0; border: 1px solid var(--line); color: var(--muted); }
+.phase span.on { color: var(--ink); background: var(--brass); border-color: var(--brass); font-weight: 700; }
+.scores { display: grid; gap: 5px; }
+.srow { display: grid; grid-template-columns: 92px minmax(0,1fr) 34px; gap: 8px; align-items: center; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.srow .nm { color: var(--muted); white-space: nowrap; }
+.srow.pick .nm { color: var(--parch); font-weight: 700; }
+.srow .why { color: var(--bad); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .v { text-align: right; }
+.srow .bar i { transition: width .25s; background: #46557e; }
+.srow.pick .bar i { background: var(--brass); }
+.formula { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+
+/* armies */
+.army { display: grid; grid-template-columns: 12px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px dashed var(--line); }
+.army:first-of-type { border-top: 0; }
+.army .sw { width: 12px; height: 30px; }
+.army .nm { font-family: var(--f-mono); font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
+.army .meta { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stepper { display: flex; align-items: center; gap: 4px; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.stepper button { width: 26px; height: 26px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-weight: 700; }
+.stepper button:hover { border-color: var(--brass); }
+.stepper output { min-width: 22px; text-align: center; font-weight: 700; }
+.newarmy { display: grid; grid-template-columns: minmax(0,1fr) 64px 82px auto; gap: 6px; }
+.newarmy input, .newarmy select { background: #0b1328; border: 1px solid var(--line); padding: 5px 7px; min-width: 0; font-family: var(--f-mono); font-size: 12.5px; }
+
+/* lower */
+.lower { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 860px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.term { padding: 12px 14px 14px; display: grid; gap: 8px; min-width: 0; }
+.term-out { height: 250px; overflow: auto; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; white-space: pre; background: #070c1a; border: 1px solid var(--line); padding: 10px 12px; }
+.term-out .c { color: var(--parch); } .term-out .g { color: var(--ok); } .term-out .r { color: var(--bad); } .term-out .y { color: var(--brass); } .term-out .m { color: var(--muted); }
+.prompt { display: flex; align-items: center; gap: 8px; background: #070c1a; border: 1px solid var(--line); padding: 6px 10px; }
+.prompt label { font-family: var(--f-mono); color: var(--ok); font-weight: 700; white-space: nowrap; }
+.prompt input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-family: var(--f-mono); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { cursor: pointer; font-family: var(--f-mono); font-size: 11.5px; padding: 3px 8px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+.chips button:hover { color: var(--parch); border-color: var(--brass); }
+.events { max-height: 300px; overflow: auto; }
+.events table { width: 100%; border-collapse: collapse; font-family: var(--f-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.events th { text-align: left; color: var(--muted); font-weight: 400; position: sticky; top: 0; background: var(--panel); padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: 11px; letter-spacing: .04em; }
+.events td { padding: 3px 6px; border-bottom: 1px solid rgba(42,56,102,.45); vertical-align: top; }
+.events td.msg { color: var(--muted); white-space: normal; overflow-wrap: anywhere; }
+.events tr.Warning td.ty { color: var(--warn); } .events tr.Normal td.ty { color: var(--ok); }
+.events tr.fresh td { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: rgba(232,181,60,.18); } to { background: transparent; } }
+.foot { color: var(--muted); font-size: 12.5px; max-width: 85ch; }
+.foot b { color: var(--parch); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .events tr.fresh td { animation: none; } .btn { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>CLUSTER CONQUEST</h1>
+      <p>Kubernetes 戰略沙盤：城池是 Node，士兵是 Pod，排程器是你的軍師</p>
+    </div>
+    <div class="stats" aria-live="polite">
+      <span class="chip"><span>TURN</span><b id="st-turn">1</b></span>
+      <span class="chip" id="st-ready-c"><span>Running</span><b id="st-ready">0/0</b></span>
+      <span class="chip" id="st-pend-c"><span>Pending</span><b id="st-pend">0</b></span>
+      <span class="chip"><span>Nodes</span><b id="st-nodes">4</b></span>
+      <button class="chip iconbtn" id="snd" type="button" aria-pressed="false"><span>音效</span><b>OFF</b></button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="leftcol">
+    <section class="frame" aria-label="叢集地圖">
+      <div class="mapbox">
+        <canvas id="map" width="1280" height="720" aria-label="叢集地圖，點擊城池以選取節點"></canvas>
+        <div class="hint">點城池 = 選節點</div>
+      </div>
+      <div class="orders" role="toolbar" aria-label="戰令">
+        <button class="btn danger" id="o-strike" type="button">雷擊節點 <span class="k">NotReady</span></button>
+        <button class="btn" id="o-surge" type="button">流量洪峰 <span class="k">HPA</span></button>
+        <button class="btn" id="o-expand" type="button">擴建城池 <span class="k">+node</span></button>
+        <button class="btn" id="o-netpol" type="button" aria-pressed="false">NetworkPolicy <span class="k" id="np-state">off</span></button>
+        <button class="btn" id="o-reset" type="button">重置戰局</button>
+      </div>
+    </section>
+    <section class="frame term" aria-label="kubectl 主控台">
+      <h2 style="margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.06em">KUBECTL</h2>
+      <div class="term-out" id="out" tabindex="0" aria-live="polite"></div>
+      <form class="prompt" id="cmdform" autocomplete="off">
+        <label for="cmd">$</label>
+        <input id="cmd" spellcheck="false" placeholder="kubectl get pods -o wide">
+      </form>
+      <div class="chips" id="chips"></div>
+    </section>
+    </div>
+
+    <aside class="side">
+      <section class="card frame" id="nodecard" aria-live="polite"></section>
+
+      <section class="card frame">
+        <h2>KUBE-SCHEDULER <small id="sched-q">queue 0</small></h2>
+        <div class="phase" aria-label="排程階段"><span id="ph-q">Queue</span><span id="ph-f">Filter</span><span id="ph-s">Score</span><span id="ph-b">Bind</span></div>
+        <div class="sched-pod" id="sched-pod">等待 Pending Pod…</div>
+        <div class="scores" id="scores"></div>
+        <div class="formula">score = 70 × 空閒CPU比 + 30 × 同部隊分散</div>
+      </section>
+
+      <section class="card frame">
+        <h2>ARMIES <small>Deployments</small></h2>
+        <div id="armies"></div>
+        <form class="newarmy" id="newarmy" autocomplete="off">
+          <input id="na-name" aria-label="部隊名稱" placeholder="cache" maxlength="12" required pattern="[a-z][a-z0-9-]{0,11}">
+          <input id="na-rep" aria-label="副本數" type="number" min="1" max="12" value="3">
+          <select id="na-cpu" aria-label="CPU requests"><option value="250">250m</option><option value="500" selected>500m</option><option value="1000">1000m</option></select>
+          <button class="btn sm" type="submit">出征</button>
+        </form>
+      </section>
+    </aside>
+  </div>
+
+  <div class="lowerx">
+    <section class="frame term" aria-label="事件紀錄">
+      <h2 style="margin:0;font-family:var(--f-display);font-size:15px;color:var(--brass);letter-spacing:.06em;display:flex;justify-content:space-between">EVENTS <small style="font-family:var(--f-mono);font-size:11px;color:var(--muted);letter-spacing:0;font-weight:400">kubectl get events -w</small></h2>
+      <div class="events"><table><thead><tr><th>AGE</th><th>TYPE</th><th>REASON</th><th>OBJECT</th><th>MESSAGE</th></tr></thead><tbody id="ev"></tbody></table></div>
+    </section>
+  </div>
+
+  <p class="foot">時間經過壓縮：真實叢集中節點失聯到 Pod 被驅逐約需 5 分鐘（node-monitor-grace-period 加上 toleration），這裡只要 1.6 秒。指令同時接受 <b>kubectl</b> 與 <b>oc</b>；control-plane 帶有 <b>NoSchedule</b> taint，所以士兵不會駐紮在王城。</p>
+</div>
+
+<script>
+// Cluster Conquest — shared pixel engine (terrain, sprites, pixel text)
+// Low-res world: 320 x 180 logical pixels, scaled up with nearest-neighbour.
+const CC = (() => {
+  const W = 320, H = 180;
+
+  // ---------- deterministic noise ----------
+  function mulberry(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function makeNoise(seed) {
+    const rnd = mulberry(seed);
+    const P = new Float32Array(64 * 64);
+    for (let i = 0; i < P.length; i++) P[i] = rnd();
+    const g = (x, y) => P[((y & 63) * 64) + (x & 63)];
+    const sm = t => t * t * (3 - 2 * t);
+    function v(x, y) {
+      const xi = Math.floor(x), yi = Math.floor(y);
+      const xf = sm(x - xi), yf = sm(y - yi);
+      const a = g(xi, yi), b = g(xi + 1, yi), c = g(xi, yi + 1), d = g(xi + 1, yi + 1);
+      return a + (b - a) * xf + (c - a) * yf + (a - b - c + d) * xf * yf;
+    }
+    return (x, y) => {
+      let s = 0, amp = 0.5, f = 1;
+      for (let o = 0; o < 5; o++) { s += v(x * f, y * f) * amp; amp *= 0.5; f *= 2.03; }
+      return s;
+    };
+  }
+
+  // Palette (EGA-ish but tuned)
+  const PAL = {
+    deep: [16, 30, 66], sea: [26, 52, 98], shallow: [42, 86, 128], foam: [120, 170, 196],
+    sand: [196, 174, 116], grass: [86, 128, 62], grass2: [70, 112, 52], forest: [40, 82, 46],
+    forest2: [30, 64, 38], hill: [128, 112, 74], rock: [118, 118, 126], snow: [222, 226, 232],
+    road: [168, 140, 92], roadDark: [120, 96, 60],
+  };
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+  // Build terrain heightmap with bumps where castles stand
+  function buildTerrain(seed, sites) {
+    const n = makeNoise(seed), n2 = makeNoise(seed + 7);
+    const h = new Float32Array(W * H), m = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const nx = x / W - 0.5, ny = y / H - 0.5;
+      let e = n(x / 46, y / 46);
+      const d = Math.sqrt(nx * nx * 1.1 + ny * ny * 2.2);
+      e = e * 1.1 - d * 0.9 + 0.13;
+      for (const s of sites) {
+        const dx = x - s.x, dy = y - s.y; const r = s.r || 18;
+        const w = Math.exp(-(dx * dx + dy * dy) / (r * r));
+        e = e * (1 - w) + (0.36 + (e - 0.3) * 0.25) * w;
+      }
+      h[y * W + x] = e;
+      m[y * W + x] = n2(x / 22, y / 22);
+    }
+    return { h, m };
+  }
+
+  function terrainColor(e, moist, x, y, t) {
+    const b = BAYER[(y & 3) * 4 + (x & 3)] / 16;
+    if (e < 0.22) {
+      // water with animated dithered waves
+      const w = Math.sin(x * 0.35 + y * 0.6 + t * 1.6) * 0.5 + Math.sin(x * 0.11 - t * 0.9) * 0.5;
+      if (e < 0.12) return (w * 0.15 + b > 0.98) ? PAL.sea : PAL.deep;
+      if (e > 0.205 && (w * 0.3 + b) > 0.85) return PAL.foam;
+      return (e - 0.12) * 10 + w * 0.1 > b ? PAL.shallow : PAL.sea;
+    }
+    if (e < 0.25) return PAL.sand;
+    if (e < 0.52) {
+      if (moist > 0.6) return PAL.forest;
+      if (moist > 0.56) return (moist - 0.56) * 25 > b ? PAL.forest : PAL.grass2;
+      return moist + b * 0.12 > 0.47 ? PAL.grass2 : PAL.grass;
+    }
+    if (e < 0.6) return moist > 0.55 ? PAL.forest2 : PAL.hill;
+    if (e < 0.7) return PAL.rock;
+    return PAL.snow;
+  }
+
+  // Render terrain into ImageData; mask (0..1 reveal) optional for dither fade
+  function paintTerrain(img, terr, t, reveal = 1, tint = null) {
+    const d = img.data;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, o = i * 4;
+      const b = BAYER[(y & 3) * 4 + (x & 3)] / 16;
+      // reveal radiates from left-centre
+      const rv = reveal * 2.4 - (Math.hypot(x - 80, y - 95) / 260);
+      if (rv < b) { d[o] = 8; d[o + 1] = 12; d[o + 2] = 24; d[o + 3] = 255; continue; }
+      let c = terrainColor(terr.h[i], terr.m[i], x, y, t);
+      let r = c[0], g = c[1], bl = c[2];
+      if (tint) { r = r * (1 - tint[3]) + tint[0] * tint[3]; g = g * (1 - tint[3]) + tint[1] * tint[3]; bl = bl * (1 - tint[3]) + tint[2] * tint[3]; }
+      d[o] = r; d[o + 1] = g; d[o + 2] = bl; d[o + 3] = 255;
+    }
+  }
+
+  // ---------- roads (quadratic bezier) ----------
+  function roadCtrl(a, b, bend = 0.18) {
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    return { x: mx - dy * bend, y: my + dx * bend };
+  }
+  function bez(a, c, b, t) {
+    const u = 1 - t;
+    return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+  }
+  function drawRoad(ctx, a, b, bend, progress = 1) {
+    const c = roadCtrl(a, b, bend);
+    const steps = 140;
+    for (let s = 0; s <= steps * progress; s++) {
+      const p = bez(a, c, b, s / steps);
+      const px = Math.round(p.x), py = Math.round(p.y);
+      if (s % 7 < 5) { ctx.fillStyle = rgb(PAL.road); ctx.fillRect(px, py, 1, 1); }
+      ctx.fillStyle = rgb(PAL.roadDark); ctx.fillRect(px, py + 1, 1, 1);
+    }
+  }
+
+  const rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+
+  // ---------- sprites ----------
+  // Castle: 15 x 14, origin bottom-centre
+  const CASTLE = [
+    '..f.........f..',
+    '..F.........F..',
+    '.#.#.......#.#.',
+    '.###..#.#..###.',
+    '.###.#####.###.',
+    '.#o#.#####.#o#.',
+    '.###.##o##.###.',
+    '.#############.',
+    '.#############.',
+    '.####.....####.',
+    '.###..ddd..###.',
+    '.###..ddd..###.',
+    'sssssssssssssss',
+    '.sssssssssssss.',
+  ];
+  const CITADEL = [
+    '.......f.......',
+    '.......F.......',
+    '......###......',
+    '..#.#.#o#.#.#..',
+    '..###.###.###..',
+    '..#o#######o#..',
+    '..###########..',
+    '#.#.#########.#',
+    '###.###o###.###',
+    '###############',
+    '#o#####...####o',
+    '######.ddd.####',
+    '######.ddd.####',
+    'sssssssssssssss',
+  ];
+  const RUIN = [
+    '...............',
+    '...............',
+    '...............',
+    '...............',
+    '...............',
+    '.#.............',
+    '.##.......#....',
+    '.##.#.....##...',
+    '.####...#.##.#.',
+    '.####..###.###.',
+    '.###...###..##.',
+    '.##..#.###..##.',
+    'sssssssssssssss',
+    '.sssssssssssss.',
+  ];
+  function drawSprite(ctx, map, x, y, colors, flagWave = 0) {
+    const h = map.length, w = map[0].length;
+    const ox = Math.round(x - w / 2), oy = Math.round(y - h);
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+      const ch = map[r][c]; if (ch === '.') continue;
+      let col = colors[ch]; if (!col) continue;
+      let dx = 0;
+      if (ch === 'f') dx = flagWave > 0.5 ? 1 : 0;
+      ctx.fillStyle = col; ctx.fillRect(ox + c + dx, oy + r, 1, 1);
+      if (ch === 'f') ctx.fillRect(ox + c + dx + 1, oy + r, 1, 1);
+    }
+  }
+  function castleColors(banner, stone = '#b9b4a8') {
+    return { '#': stone, 'o': '#2b2a33', 'd': '#3a2a1c', 's': 'rgba(0,0,0,0.35)', 'f': banner, 'F': '#3a3030' };
+  }
+  function ruinColors() { return { '#': '#6c6862', 's': 'rgba(0,0,0,0.35)' }; }
+
+  // Soldier unit: 5x7, team colour body, little banner
+  function drawSoldier(ctx, x, y, team, phase = 0, alpha = 1) {
+    const bob = Math.sin(phase * Math.PI * 2) > 0 ? 1 : 0;
+    const ox = Math.round(x) - 2, oy = Math.round(y) - 7 + bob * 0;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(ox, oy + 7, 5, 1);
+    // pole + pennant
+    ctx.fillStyle = '#e8e0cc'; ctx.fillRect(ox + 4, oy - 2, 1, 7);
+    ctx.fillStyle = team; ctx.fillRect(ox + 5, oy - 2, 2, 2);
+    // head
+    ctx.fillStyle = '#f0c8a0'; ctx.fillRect(ox + 1, oy + 0, 2, 2);
+    ctx.fillStyle = '#d8d8e0'; ctx.fillRect(ox + 1, oy - 1, 2, 1);
+    // body
+    ctx.fillStyle = team; ctx.fillRect(ox, oy + 2, 4, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(ox, oy + 2, 1, 3);
+    // legs
+    ctx.fillStyle = '#2a2430';
+    if (bob) { ctx.fillRect(ox, oy + 5, 1, 2); ctx.fillRect(ox + 3, oy + 5, 1, 1); }
+    else { ctx.fillRect(ox + 1, oy + 5, 1, 2); ctx.fillRect(ox + 2, oy + 5, 1, 2); }
+    ctx.globalAlpha = 1;
+  }
+  function drawGhost(ctx, x, y, alpha) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#dfe8ff';
+    const ox = Math.round(x) - 2, oy = Math.round(y) - 6;
+    ctx.fillRect(ox + 1, oy, 3, 1); ctx.fillRect(ox, oy + 1, 5, 4);
+    ctx.fillRect(ox, oy + 5, 1, 1); ctx.fillRect(ox + 2, oy + 5, 1, 1); ctx.fillRect(ox + 4, oy + 5, 1, 1);
+    ctx.fillStyle = '#20263a'; ctx.fillRect(ox + 1, oy + 2, 1, 1); ctx.fillRect(ox + 3, oy + 2, 1, 1);
+    ctx.globalAlpha = 1;
+  }
+
+  // Pixel text: render small then threshold, scale up crisp
+  const ptCache = new Map();
+  function pixelText(text, size, color, font = 'bold {s}px "DejaVu Sans Mono", monospace') {
+    const key = text + size + color + font;
+    if (ptCache.has(key)) return ptCache.get(key);
+    const f = font.replace('{s}', size);
+    const c = document.createElement('canvas'); const x = c.getContext('2d');
+    x.font = f; const w = Math.ceil(x.measureText(text).width) + 4, h = Math.ceil(size * 1.4) + 2;
+    c.width = w; c.height = h; x.font = f; x.textBaseline = 'top'; x.fillStyle = '#fff';
+    x.fillText(text, 2, 1);
+    const id = x.getImageData(0, 0, w, h);
+    const out = document.createElement('canvas'); out.width = w; out.height = h;
+    const ox = out.getContext('2d'); const od = ox.createImageData(w, h);
+    const col = parseCol(color);
+    for (let i = 0; i < id.data.length; i += 4) {
+      if (id.data[i + 3] > 110) { od.data[i] = col[0]; od.data[i + 1] = col[1]; od.data[i + 2] = col[2]; od.data[i + 3] = 255; }
+    }
+    ox.putImageData(od, 0, 0);
+    ptCache.set(key, out); return out;
+  }
+  function parseCol(c) {
+    if (c[0] === '#') { const v = parseInt(c.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; }
+    const m = c.match(/\d+/g); return m.map(Number);
+  }
+
+  return { W, H, PAL, BAYER, mulberry, buildTerrain, paintTerrain, roadCtrl, bez, drawRoad, rgb,
+    CASTLE, CITADEL, RUIN, drawSprite, castleColors, ruinColors, drawSoldier, drawGhost, pixelText };
+})();
+
+</script>
+<script>
+(() => {
+const { W, H } = CC;
+const $ = s => document.querySelector(s);
+const canvas = $('#map'), O = canvas.getContext('2d');
+const LO = document.createElement('canvas'); LO.width = W; LO.height = H;
+const L = LO.getContext('2d'); const IMG = L.createImageData(W, H);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const TEAMCOL = ['#e0474f', '#4c8cf0', '#e8b53c', '#b072e8', '#3fc6a8', '#f07ac0'];
+const CP = { id: 'control-plane', x: 62, y: 96 };
+const SITES = [
+  { id: 'worker-1', x: 150, y: 52, bend: 0.16 },
+  { id: 'worker-2', x: 222, y: 92, bend: -0.08 },
+  { id: 'worker-3', x: 168, y: 140, bend: -0.2 },
+  { id: 'worker-4', x: 266, y: 146, bend: 0.12 },
+  { id: 'worker-5', x: 106, y: 152, bend: 0.22 },
+  { id: 'worker-6', x: 262, y: 44, bend: 0.1 },
+];
+const terr = CC.buildTerrain(11, [{ x: CP.x, y: CP.y, r: 24 }, ...SITES.map(n => ({ x: n.x, y: n.y, r: 20 }))]);
+const CAP = 4000;
+
+let S; // state
+let now = 0, last = performance.now();
+let selected = 1;
+let seq = 0;
+const rid = () => Math.random().toString(36).slice(2, 7);
+
+function freshState() {
+  return {
+    t0: now, turn: 1,
+    nodes: SITES.map((s, i) => ({ ...s, active: i < 4, born: i < 4 ? -9 : 0, ready: true, cordoned: false, deadAt: null, evicted: false })),
+    deps: [
+      { name: 'web', col: 0, cpu: 250, replicas: 4, hpa: { min: 3, max: 10 } },
+      { name: 'api', col: 1, cpu: 500, replicas: 3 },
+      { name: 'db', col: 2, cpu: 1000, replicas: 2 },
+    ],
+    pods: [], queue: [], decision: null, surge: 0, netpol: false, denied: 0, allowed: 0,
+    packets: [], fx: [], schedClock: 0, ctrlClock: 0, hpaClock: 0, trafficClock: 0, lastScaleDown: 0,
+  };
+}
+
+// ---------- events ----------
+const evRows = [];
+function event(type, reason, obj, msg) {
+  evRows.unshift({ t: now, type, reason, obj, msg, fresh: true });
+  if (evRows.length > 60) evRows.pop();
+  renderEvents();
+}
+function age(t) { const s = Math.max(0, Math.floor(now - t)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm' + (s % 60) + 's'; }
+function renderEvents() {
+  const tb = $('#ev');
+  tb.innerHTML = evRows.slice(0, 40).map(e => `<tr class="${e.type}${e.fresh ? ' fresh' : ''}"><td>${age(e.t)}</td><td class="ty">${e.type}</td><td>${e.reason}</td><td>${e.obj}</td><td class="msg">${e.msg}</td></tr>`).join('');
+  evRows.forEach(e => e.fresh = false);
+}
+
+// ---------- sound ----------
+let AC = null, soundOn = false;
+function blip(freq, dur = 0.08, type = 'square', vol = 0.05, slide = 0) {
+  if (!soundOn || !AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, AC.currentTime);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), AC.currentTime + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+  o.connect(g).connect(AC.destination); o.start(); o.stop(AC.currentTime + dur + 0.02);
+}
+function thunder() {
+  if (!soundOn || !AC) return;
+  const len = AC.sampleRate * 1.4, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  let lp = 0; for (let i = 0; i < len; i++) { lp = lp * 0.9 + (Math.random() * 2 - 1) * 0.1; d[i] = lp * 4 * Math.exp(-i / len * 3.5); }
+  const s = AC.createBufferSource(), g = AC.createGain(); g.gain.value = 0.6; s.buffer = buf; s.connect(g).connect(AC.destination); s.start();
+  blip(220, 0.9, 'triangle', 0.12, 0.25);
+}
+$('#snd').addEventListener('click', e => {
+  soundOn = !soundOn;
+  if (soundOn && !AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { soundOn = false; } }
+  if (AC && AC.state === 'suspended') AC.resume();
+  e.currentTarget.querySelector('b').textContent = soundOn ? 'ON' : 'OFF';
+  e.currentTarget.setAttribute('aria-pressed', soundOn);
+  blip(660, 0.06); setTimeout(() => blip(990, 0.08), 70);
+});
+
+// ---------- model helpers ----------
+const dep = name => S.deps.find(d => d.name === name);
+const liveOn = i => S.pods.filter(p => p.node === i && p.phase !== 'Terminating');
+const usedCpu = i => liveOn(i).reduce((a, p) => a + dep(p.dep).cpu, 0);
+const schedulable = n => n.active && n.ready && !n.cordoned;
+function podName(d) { const h = (seq++ * 2654435761 >>> 0).toString(36).slice(-5); return `${d.name}-${h}`; }
+function freeSlot(i) { const used = new Set(liveOn(i).map(p => p.slot)); let k = 0; while (used.has(k)) k++; return k; }
+function slotPos(k) { const col = k % 6, row = Math.floor(k / 6); return [-15 + col * 6 + (row % 2) * 3, 5 + row * 5]; }
+
+function createPod(d) {
+  const p = { name: podName(d), dep: d.name, node: null, phase: 'Pending', created: now, reason: '' };
+  S.pods.push(p); S.queue.push(p);
+  event('Normal', 'SuccessfulCreate', `replicaset/${d.name}`, `Created pod: ${p.name}`);
+}
+function terminate(p, why) {
+  if (p.phase === 'Terminating') return;
+  if (p.phase === 'Pending') { S.queue = S.queue.filter(q => q !== p); }
+  p.phase = 'Terminating'; p.termAt = now;
+  if (why) event('Normal', why, `pod/${p.name}`, why === 'Killing' ? 'Stopping container' : 'Evicted from node');
+}
+
+// ---------- scheduler ----------
+function scoreNodes(p) {
+  const d = dep(p.dep);
+  return S.nodes.map((n, i) => {
+    if (!n.active) return null;
+    if (!n.ready) return { i, why: 'NotReady' };
+    if (n.cordoned) return { i, why: 'Unschedulable' };
+    const free = CAP - usedCpu(i);
+    if (free < d.cpu) return { i, why: 'Insufficient cpu' };
+    const least = (free - d.cpu) / CAP;
+    const same = liveOn(i).filter(q => q.dep === d.name).length;
+    const total = S.pods.filter(q => q.dep === d.name && q.node !== null && q.phase !== 'Terminating').length;
+    const spread = total ? 1 - same / Math.max(1, total) : 1;
+    return { i, score: Math.round(70 * least + 30 * spread) };
+  });
+}
+function scheduleOne() {
+  const p = S.queue.shift(); if (!p) return;
+  const res = scoreNodes(p);
+  const cp = { i: -1, why: 'taint NoSchedule' };
+  const ok = res.filter(r => r && r.score !== undefined);
+  S.decision = { pod: p.name, dep: p.dep, rows: [cp, ...res.filter(Boolean)], pick: null, t: now };
+  if (!ok.length) {
+    p.reason = 'Insufficient resources';
+    S.queue.push(p);
+    if (!p.warned || now - p.warned > 6) { p.warned = now; event('Warning', 'FailedScheduling', `pod/${p.name}`, `0/${S.nodes.filter(n => n.active).length + 1} nodes are available: ${summarize(res)}`); }
+    return;
+  }
+  ok.sort((a, b) => b.score - a.score || a.i - b.i);
+  const pick = ok[0].i; S.decision.pick = pick;
+  p.node = pick; p.phase = 'Marching'; p.march0 = now; p.dur = 1.2 + Math.random() * 0.3; p.slot = freeSlot(pick); p.reason = '';
+  event('Normal', 'Scheduled', `pod/${p.name}`, `Successfully assigned empire/${p.name} to ${S.nodes[pick].id}`);
+  blip(880, 0.04, 'square', 0.03);
+}
+function summarize(res) {
+  const c = {}; res.filter(Boolean).forEach(r => { if (r.why) c[r.why] = (c[r.why] || 0) + 1; });
+  return Object.entries(c).map(([k, v]) => `${v} ${k}`).concat(['1 node(s) had untolerated taint']).join(', ') + '.';
+}
+
+// ---------- controllers ----------
+function reconcile() {
+  for (const d of S.deps) {
+    const live = S.pods.filter(p => p.dep === d.name && p.phase !== 'Terminating');
+    if (live.length < d.replicas) createPod(d);
+    else if (live.length > d.replicas) {
+      const victim = live.find(p => p.phase === 'Pending') || live[live.length - 1];
+      terminate(victim, 'Killing');
+    }
+  }
+  // drop pods of deleted deployments
+  S.pods.filter(p => !dep(p.dep) && p.phase !== 'Terminating').forEach(p => terminate(p, 'Killing'));
+}
+function hpa() {
+  const d = dep('web'); if (!d || !d.hpa) return;
+  const demand = 2.2 + S.surge * 7;
+  const util = Math.round(demand / d.replicas * 60);
+  d.util = util;
+  let want = Math.min(d.hpa.max, Math.max(d.hpa.min, Math.ceil(demand)));
+  if (want > d.replicas) {
+    event('Normal', 'SuccessfulRescale', 'hpa/web', `New size: ${want}; reason: cpu resource utilization above target (${util}% / 60%)`);
+    d.replicas = want; renderArmies();
+  } else if (want < d.replicas && now - S.lastScaleDown > 6) {
+    S.lastScaleDown = now;
+    d.replicas = Math.max(want, d.replicas - 1);
+    event('Normal', 'SuccessfulRescale', 'hpa/web', `New size: ${d.replicas}; reason: All metrics below target`);
+    renderArmies();
+  }
+}
+function nodeLifecycle() {
+  S.nodes.forEach((n, i) => {
+    if (n.active && !n.ready && !n.evicted && now - n.deadAt > 1.6) {
+      n.evicted = true;
+      event('Warning', 'TaintManagerEviction', `node/${n.id}`, `Marking for deletion pods on unreachable node (${liveOn(i).length} pods)`);
+      liveOn(i).forEach(p => terminate(p, null));
+    }
+  });
+}
+function traffic() {
+  const running = d => S.pods.filter(p => p.dep === d && p.phase === 'Running');
+  const send = (a, b, deny) => {
+    const pa = running(a), pb = running(b); if (!pa.length || !pb.length) return;
+    const src = pa[Math.random() * pa.length | 0], dst = pb[Math.random() * pb.length | 0];
+    const A = podXY(src), B = podXY(dst);
+    S.packets.push({ x0: A.x, y0: A.y - 3, x1: B.x, y1: B.y - 3, t0: now, dur: 0.7 + Math.random() * 0.4, col: TEAMCOL[dep(a).col], deny });
+  };
+  if (Math.random() < 0.6) send('web', 'api', false);
+  if (Math.random() < 0.45) send('api', 'db', false);
+  if (Math.random() < 0.35) send('web', 'db', S.netpol);
+}
+
+// ---------- actions ----------
+function strike(i) {
+  const n = S.nodes[i];
+  if (!n || !n.active || !n.ready) return false;
+  n.ready = false; n.deadAt = now; n.evicted = false;
+  S.fx.push({ kind: 'bolt', i, t0: now });
+  event('Warning', 'NodeNotReady', `node/${n.id}`, 'Node status is now: NodeNotReady (kubelet stopped posting status)');
+  thunder();
+  if (!reduceMotion) shake = 0.6;
+  renderNode();
+  return true;
+}
+function revive(i) {
+  const n = S.nodes[i]; if (!n || n.ready) return false;
+  n.ready = true; n.deadAt = null; n.evicted = false; n.born = now;
+  event('Normal', 'NodeReady', `node/${n.id}`, 'Node status is now: NodeReady');
+  blip(523, 0.1); setTimeout(() => blip(784, 0.14), 90); renderNode(); return true;
+}
+function cordon(i, on) {
+  const n = S.nodes[i]; if (!n || !n.active) return false;
+  n.cordoned = on;
+  event('Normal', on ? 'NodeNotSchedulable' : 'NodeSchedulable', `node/${n.id}`, on ? 'Node status is now: NodeNotSchedulable' : 'Node status is now: NodeSchedulable');
+  renderNode(); return true;
+}
+function drain(i) {
+  const n = S.nodes[i]; if (!n || !n.active) return false;
+  cordon(i, true);
+  liveOn(i).forEach((p, k) => setTimeout(() => { if (p.phase !== 'Terminating') terminate(p, 'Evicted'); }, 180 * k));
+  return true;
+}
+function expand() {
+  const i = S.nodes.findIndex(n => !n.active); if (i < 0) return false;
+  const n = S.nodes[i]; n.active = true; n.born = now; n.ready = true; n.cordoned = false;
+  event('Normal', 'RegisteredNode', `node/${n.id}`, `Node ${n.id} event: Registered Node ${n.id} in Controller`);
+  blip(392, 0.1); setTimeout(() => blip(523, 0.1), 100); setTimeout(() => blip(659, 0.16), 200);
+  selected = i; renderNode(); return true;
+}
+function surge() {
+  S.surge = Math.min(1.2, S.surge + 0.8);
+  event('Normal', 'TrafficSpike', 'service/web', 'Requests per second ×4 at the gates');
+  blip(330, 0.2, 'sawtooth', 0.04, 2);
+}
+function setNetpol(on) {
+  S.netpol = on;
+  $('#np-state').textContent = on ? 'on' : 'off';
+  $('#o-netpol').classList.toggle('on', on);
+  $('#o-netpol').setAttribute('aria-pressed', on);
+  event('Normal', on ? 'PolicyApplied' : 'PolicyRemoved', 'networkpolicy/db-allow-api', on ? 'Ingress to app=db allowed only from app=api' : 'All pod-to-pod traffic allowed');
+}
+
+// ---------- drawing ----------
+let shake = 0;
+function podXY(p) {
+  const n = S.nodes[p.node];
+  if (p.phase === 'Marching') {
+    const k = Math.min(1, (now - p.march0) / p.dur);
+    const c = CC.roadCtrl(CP, n, n.bend);
+    const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    const q = CC.bez(CP, c, n, e);
+    const o = slotPos(p.slot);
+    return { x: q.x + o[0] * e, y: q.y + o[1] * e, moving: true };
+  }
+  const o = slotPos(p.slot); return { x: n.x + o[0], y: n.y + o[1] };
+}
+
+function drawWorld() {
+  CC.paintTerrain(IMG, terr, reduceMotion ? 0 : now, 1, null);
+  L.putImageData(IMG, 0, 0);
+  S.nodes.forEach(n => { if (n.active) CC.drawRoad(L, CP, n, n.bend, Math.min(1, (now - n.born) / 1.0)); });
+  const wave = reduceMotion ? 0 : Math.floor(now * 4) % 2;
+  CC.drawSprite(L, CC.CITADEL, CP.x, CP.y, CC.castleColors('#f2efe6', '#c9c3b6'), wave);
+  S.nodes.forEach((n, i) => {
+    if (!n.active) {
+      // empty build site marker
+      L.fillStyle = 'rgba(0,0,0,0.25)'; L.fillRect(n.x - 5, n.y - 2, 11, 2);
+      L.fillStyle = 'rgba(232,181,60,0.55)';
+      [[-5, -2], [5, -2], [-5, -9], [5, -9]].forEach(([dx, dy]) => L.fillRect(n.x + dx, n.y + dy, 1, 1));
+      return;
+    }
+    const grow = Math.min(1, (now - n.born) / 0.8);
+    if (!n.ready) CC.drawSprite(L, CC.RUIN, n.x, n.y, CC.ruinColors());
+    else if (grow < 1) {
+      L.save(); L.beginPath(); L.rect(n.x - 9, n.y - 14 * grow, 18, 14 * grow + 1); L.clip();
+      CC.drawSprite(L, CC.CASTLE, n.x, n.y, CC.castleColors(n.cordoned ? '#9aa6c4' : '#f2efe6')); L.restore();
+    } else CC.drawSprite(L, CC.CASTLE, n.x, n.y, CC.castleColors(n.cordoned ? '#ff9a4a' : '#f2efe6', n.cordoned ? '#a9a296' : '#b9b4a8'), (wave + i) % 2);
+    if (i === selected) {
+      const blink = reduceMotion || Math.floor(now * 3) % 2;
+      if (blink) { L.fillStyle = '#e8b53c'; [[-10, -16], [9, -16], [-10, 2], [9, 2]].forEach(([dx, dy]) => { L.fillRect(n.x + dx, n.y + dy, 2, 1); L.fillRect(n.x + dx + (dx < 0 ? 0 : 1), n.y + dy + (dy < 0 ? 0 : -1), 1, 2); }); }
+    }
+    if (!n.ready) {
+      for (let k = 0; k < 10; k++) {
+        const life = ((now - n.deadAt) * 0.6 + k / 10) % 1;
+        L.globalAlpha = (1 - life) * 0.7; const g = 70 + life * 60 | 0;
+        L.fillStyle = `rgb(${g},${g},${g + 6})`;
+        L.fillRect(Math.round(n.x - 4 + Math.sin(k * 3.1 + now) * 3 + life * 6), Math.round(n.y - 8 - life * 22), 1 + (life * 3 | 0), 1 + (life * 3 | 0));
+      }
+      L.globalAlpha = 1;
+    }
+  });
+  // pending soldiers wait at the gate
+  const pend = S.pods.filter(p => p.phase === 'Pending');
+  pend.forEach((p, k) => {
+    const x = CP.x + 12 + (k % 5) * 5, y = CP.y + 10 + Math.floor(k / 5) * 6;
+    CC.drawSoldier(L, x, y, TEAMCOL[dep(p.dep)?.col ?? 0], 0, 0.75 + 0.25 * Math.sin(now * 5 + k));
+  });
+  // pods
+  for (const p of S.pods) {
+    if (p.node === null) continue;
+    const d = dep(p.dep); const col = TEAMCOL[d ? d.col : 0];
+    const q = podXY(p);
+    if (p.phase === 'Terminating') {
+      const a = 1 - (now - p.termAt) / 1.2;
+      if (a > 0) CC.drawGhost(L, q.x + Math.sin(now * 6 + p.slot) * 1.5, q.y - (now - p.termAt) * 16, a);
+    } else CC.drawSoldier(L, q.x, q.y, col, q.moving ? now * 3 : 0.2);
+  }
+  // packets
+  for (const k of S.packets) {
+    const u = (now - k.t0) / k.dur;
+    if (k.deny && u > 0.55) {
+      const b = (u - 0.55) / 0.45;
+      const x = k.x0 + (k.x1 - k.x0) * 0.55, y = k.y0 + (k.y1 - k.y0) * 0.55;
+      L.fillStyle = '#ff7a7a';
+      for (let r = 0; r < 5; r++) { const a = r * 1.256 + k.t0; L.fillRect(Math.round(x + Math.cos(a) * b * 5), Math.round(y + Math.sin(a) * b * 5), 1, 1); }
+      if (b < 0.6) { L.fillStyle = '#fff'; L.fillRect(Math.round(x) - 1, Math.round(y) - 1, 1, 1); L.fillRect(Math.round(x) + 1, Math.round(y) + 1, 1, 1); L.fillRect(Math.round(x) + 1, Math.round(y) - 1, 1, 1); L.fillRect(Math.round(x) - 1, Math.round(y) + 1, 1, 1); L.fillRect(Math.round(x), Math.round(y), 1, 1); }
+      continue;
+    }
+    for (let tr = 0; tr < 3; tr++) {
+      const v = u - tr * 0.04; if (v < 0 || v > 1) continue;
+      L.globalAlpha = 1 - tr * 0.3; L.fillStyle = tr ? k.col : '#fff6dc';
+      L.fillRect(Math.round(k.x0 + (k.x1 - k.x0) * v), Math.round(k.y0 + (k.y1 - k.y0) * v - Math.sin(v * Math.PI) * 8), 1, 1);
+    }
+    L.globalAlpha = 1;
+  }
+  // bolts
+  for (const f of S.fx) if (f.kind === 'bolt' && now - f.t0 < 0.35) {
+    const n = S.nodes[f.i]; const r = CC.mulberry(Math.floor(now * 30));
+    let x = n.x + 8, y = 0; L.fillStyle = '#fff6c8';
+    while (y < n.y - 6) { const nx = x + (r() - 0.55) * 6, ny = y + 3 + r() * 4, st = Math.ceil(Math.hypot(nx - x, ny - y)); for (let s = 0; s < st; s++) L.fillRect(Math.round(x + (nx - x) * s / st), Math.round(y + (ny - y) * s / st), 1, 1); x = nx; y = ny; }
+  }
+}
+
+let SC = 4;
+function drawHUD() {
+  const cw = canvas.width;
+  const fs = Math.max(9, Math.round(cw / 68));
+  const lab = (txt, x, y, col, size = fs, w = 700) => {
+    O.font = `${w} ${size}px "JetBrains Mono", monospace`; O.textAlign = 'center';
+    O.fillStyle = 'rgba(4,8,18,0.9)'; O.fillText(txt, x + 2, y + 2); O.fillStyle = col; O.fillText(txt, x, y);
+  };
+  S.nodes.forEach((n, i) => {
+    if (!n.active) { lab('+ ' + n.id, n.x * SC, (n.y + 8) * SC, 'rgba(232,181,60,0.6)', fs * 0.85, 400); return; }
+    const rows = Math.max(1, Math.ceil(liveOn(i).length / 6));
+    const x = n.x * SC, y = (n.y + 8 + rows * 5) * SC + fs * 0.9;
+    const st = !n.ready ? ['NotReady', '#ff7a7a'] : n.cordoned ? ['SchedulingDisabled', '#f0a24a'] : null;
+    lab(n.id, x, y, st ? st[1] : '#f2efe6');
+    const used = usedCpu(i) / CAP, bw = fs * 5.2, bh = Math.max(5, fs * 0.5);
+    O.fillStyle = 'rgba(4,8,18,0.9)'; O.fillRect(x - bw / 2 + 2, y + fs * 0.45 + 2, bw, bh);
+    O.fillStyle = '#1c2744'; O.fillRect(x - bw / 2, y + fs * 0.45, bw, bh);
+    O.fillStyle = used > 0.85 ? '#ff7a7a' : '#e8b53c'; O.fillRect(x - bw / 2, y + fs * 0.45, bw * used, bh);
+    if (st) lab(st[0], x, y + fs * 0.45 + bh + fs * 1.1, st[1], fs * 0.85, 600);
+  });
+  lab('control-plane', CP.x * SC, (CP.y + 15) * SC + fs * 0.4, '#e8b53c');
+  const pend = S.pods.filter(p => p.phase === 'Pending').length;
+  if (pend) lab(`${pend} Pending`, (CP.x + 22) * SC, (CP.y + 30) * SC, '#f0a24a', fs * 0.9);
+  // scheduler pick line
+  const d = S.decision;
+  if (d && d.pick !== null && now - d.t < 0.6) {
+    const n = S.nodes[d.pick]; const a = 1 - (now - d.t) / 0.6;
+    O.globalAlpha = a; O.strokeStyle = TEAMCOL[dep(d.dep)?.col ?? 0]; O.lineWidth = Math.max(2, SC * 0.6);
+    O.beginPath(); O.arc(n.x * SC, (n.y - 6) * SC, (10 + (1 - a) * 14) * SC, 0, Math.PI * 2); O.stroke(); O.globalAlpha = 1;
+  }
+  // netpol counter
+  if (S.netpol || S.denied) {
+    O.font = `700 ${fs}px "JetBrains Mono", monospace`; O.textAlign = 'right';
+    const txt = `NetworkPolicy ${S.netpol ? 'ENFORCED' : 'off'} · denied ${S.denied}`;
+    O.fillStyle = 'rgba(10,16,34,0.85)'; const tw = O.measureText(txt).width;
+    O.fillRect(cw - tw - fs * 1.6, fs * 0.6, tw + fs, fs * 1.8);
+    O.fillStyle = S.netpol ? '#8fe08a' : '#9aa6c4'; O.fillText(txt, cw - fs * 1.1, fs * 1.85);
+  }
+  // vignette + flash
+  const flash = S.fx.find(f => f.kind === 'bolt' && now - f.t0 < 0.15);
+  if (flash) { O.fillStyle = 'rgba(255,248,225,0.55)'; O.fillRect(0, 0, cw, canvas.height); }
+  const red = S.fx.find(f => f.kind === 'bolt' && now - f.t0 < 1.2);
+  if (red) { O.fillStyle = `rgba(150,20,30,${0.22 * (1 - (now - red.t0) / 1.2)})`; O.fillRect(0, 0, cw, canvas.height); }
+}
+
+function frame() {
+  const cw = canvas.width;
+  SC = cw / W;
+  drawWorld();
+  O.imageSmoothingEnabled = false;
+  let sx = 0, sy = 0;
+  if (shake > 0) { sx = Math.sin(now * 90) * shake * SC * 3; sy = Math.cos(now * 70) * shake * SC * 3; }
+  O.fillStyle = '#0e1a3a'; O.fillRect(0, 0, cw, canvas.height);
+  O.drawImage(LO, sx, sy, cw, canvas.height);
+  drawHUD();
+}
+
+// ---------- loop ----------
+function tick(ts) {
+  const dt = Math.min(0.1, (ts - last) / 1000); last = ts; now += dt;
+  shake = Math.max(0, shake - dt);
+  S.surge = Math.max(0, S.surge - dt * 0.03);
+  S.ctrlClock += dt; S.schedClock += dt; S.hpaClock += dt; S.trafficClock += dt;
+  if (S.ctrlClock > 0.22) { S.ctrlClock = 0; reconcile(); }
+  if (S.schedClock > 0.28) { S.schedClock = 0; scheduleOne(); }
+  if (S.hpaClock > 1.5) { S.hpaClock = 0; hpa(); }
+  if (S.trafficClock > 0.16) { S.trafficClock = 0; traffic(); }
+  nodeLifecycle();
+  for (const p of S.pods) if (p.phase === 'Marching' && now - p.march0 >= p.dur) {
+    p.phase = 'Running'; p.started = now;
+    event('Normal', 'Started', `pod/${p.name}`, `Started container ${p.dep}`);
+    blip(1175, 0.05, 'square', 0.035); setTimeout(() => blip(1568, 0.07, 'square', 0.03), 50);
+  }
+  S.pods = S.pods.filter(p => !(p.phase === 'Terminating' && now - p.termAt > 1.3));
+  S.packets = S.packets.filter(k => {
+    const done = now - k.t0 > k.dur;
+    if (done) { if (k.deny) S.denied++; else S.allowed++; }
+    return !done;
+  });
+  S.fx = S.fx.filter(f => now - f.t0 < 2);
+  const turn = 1 + Math.floor((now - S.t0) / 15);
+  if (turn !== S.turn) { S.turn = turn; }
+  frame();
+  uiClock += dt; if (uiClock > 0.25) { uiClock = 0; renderStats(); renderSched(); renderNode(true); renderArmyMeta(); }
+  requestAnimationFrame(tick);
+}
+let uiClock = 0;
+
+// ---------- UI ----------
+function renderStats() {
+  const tot = S.deps.reduce((a, d) => a + d.replicas, 0);
+  const run = S.pods.filter(p => p.phase === 'Running').length;
+  const pend = S.pods.filter(p => p.phase === 'Pending').length;
+  $('#st-turn').textContent = S.turn;
+  $('#st-ready').textContent = `${run}/${tot}`;
+  $('#st-ready-c').className = 'chip ' + (run === tot ? 'ok' : 'warn');
+  $('#st-pend').textContent = pend;
+  $('#st-pend-c').className = 'chip ' + (pend ? 'bad' : '');
+  $('#st-nodes').textContent = S.nodes.filter(n => n.active && n.ready).length + '/' + S.nodes.filter(n => n.active).length;
+}
+function renderSched() {
+  $('#sched-q').textContent = `queue ${S.queue.length}`;
+  const d = S.decision;
+  const ph = d ? (d.pick === null ? 'f' : (now - d.t < 0.12 ? 'f' : now - d.t < 0.24 ? 's' : 'b')) : 'q';
+  ['q', 'f', 's', 'b'].forEach(k => $('#ph-' + k).classList.toggle('on', k === ph));
+  if (!d) return;
+  const col = TEAMCOL[dep(d.dep)?.col ?? 0];
+  $('#sched-pod').innerHTML = `<span style="color:${col}">pod/${d.pod}</span> → ${d.pick === null ? '<span style="color:var(--bad)">FailedScheduling</span>' : `<b>${S.nodes[d.pick].id}</b>`}`;
+  $('#scores').innerHTML = d.rows.map(r => {
+    const nm = r.i < 0 ? 'control-plane' : S.nodes[r.i].id;
+    if (r.why) return `<div class="srow"><span class="nm">${nm}</span><span class="why">✕ ${r.why}</span><span></span></div>`;
+    return `<div class="srow${r.i === d.pick ? ' pick' : ''}"><span class="nm">${nm}</span><span class="bar"><i style="width:${r.score}%"></i></span><span class="v">${r.score}</span></div>`;
+  }).join('');
+}
+let nodeSig = '';
+function renderNode(soft) {
+  const n = S.nodes[selected]; if (!n) return;
+  const pods = liveOn(selected);
+  const used = usedCpu(selected);
+  const status = !n.active ? ['未建造', 'mute'] : !n.ready ? ['NotReady', 'bad'] : n.cordoned ? ['SchedulingDisabled', 'warn'] : ['Ready', 'ok'];
+  const sig = [selected, status[0], used, pods.map(p => p.name + p.phase).join()].join('|');
+  if (soft && sig === nodeSig) return; nodeSig = sig;
+  const el = $('#nodecard');
+  if (!n.active) {
+    el.innerHTML = `<h2>${n.id.toUpperCase()} <span class="pill mute">未建造</span></h2><p style="margin:0;color:var(--muted)">這塊空地還沒有城池。按「擴建城池」加入叢集。</p><div class="row"><button class="btn sm" data-a="expand" type="button">在此擴建</button></div>`;
+  } else {
+    el.innerHTML = `<h2>${n.id.toUpperCase()} <span class="pill ${status[1]}">${status[0]}</span></h2>
+      <dl class="kv"><dt>cpu requests</dt><dd>${used}m / ${CAP}m</dd><dt>pods</dt><dd>${pods.length}</dd><dt>roles</dt><dd>worker</dd></dl>
+      <div class="bar" aria-label="CPU 使用比例"><i style="width:${Math.min(100, used / CAP * 100)}%;background:${used / CAP > .85 ? 'var(--bad)' : 'var(--brass)'}"></i></div>
+      <div class="podgrid" aria-label="此節點上的 Pod">${pods.map(p => `<span title="${p.name} (${p.phase})" style="background:${TEAMCOL[dep(p.dep)?.col ?? 0]};opacity:${p.phase === 'Running' ? 1 : .5}"></span>`).join('') || '<em style="color:var(--muted);font-size:12px">空城</em>'}</div>
+      <div class="row">
+        ${n.cordoned ? '<button class="btn sm" data-a="uncordon" type="button">uncordon</button>' : '<button class="btn sm" data-a="cordon" type="button">cordon</button>'}
+        <button class="btn sm" data-a="drain" type="button">drain</button>
+        ${n.ready ? '<button class="btn sm danger" data-a="strike" type="button">雷擊</button>' : '<button class="btn sm" data-a="revive" type="button">重建城池</button>'}
+      </div>`;
+  }
+}
+$('#nodecard').addEventListener('click', e => {
+  const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+  if (a === 'cordon') cordon(selected, true);
+  if (a === 'uncordon') cordon(selected, false);
+  if (a === 'drain') drain(selected);
+  if (a === 'strike') strike(selected);
+  if (a === 'revive') revive(selected);
+  if (a === 'expand') { const n = S.nodes[selected]; n.active = true; n.born = now; n.ready = true; event('Normal', 'RegisteredNode', `node/${n.id}`, `Registered Node ${n.id} in Controller`); }
+  nodeSig = ''; renderNode();
+});
+
+function renderArmies() {
+  $('#armies').innerHTML = S.deps.map((d, k) => `
+    <div class="army" data-k="${k}">
+      <span class="sw" style="background:${TEAMCOL[d.col]}"></span>
+      <div style="min-width:0"><div class="nm">deploy/${d.name}</div><div class="meta" id="am-${d.name}"></div></div>
+      <div class="stepper"><button type="button" data-s="-1" aria-label="減少 ${d.name} 副本">−</button><output>${d.replicas}</output><button type="button" data-s="1" aria-label="增加 ${d.name} 副本">+</button></div>
+    </div>`).join('');
+  renderArmyMeta();
+}
+function renderArmyMeta() {
+  S.deps.forEach(d => {
+    const el = document.getElementById('am-' + d.name); if (!el) return;
+    const run = S.pods.filter(p => p.dep === d.name && p.phase === 'Running').length;
+    el.textContent = `${run}/${d.replicas} ready · ${d.cpu}m` + (d.hpa ? ` · HPA ${d.util ?? 37}%/60%` : '');
+  });
+}
+$('#armies').addEventListener('click', e => {
+  const b = e.target.closest('[data-s]'); if (!b) return;
+  const d = S.deps[+b.closest('.army').dataset.k];
+  d.replicas = Math.max(0, Math.min(12, d.replicas + +b.dataset.s));
+  if (d.hpa) { d.hpa.min = Math.min(d.hpa.min, d.replicas); }
+  event('Normal', 'ScalingReplicaSet', `deployment/${d.name}`, `Scaled replica set ${d.name} to ${d.replicas}`);
+  renderArmies();
+});
+$('#newarmy').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#na-name').value.trim().toLowerCase();
+  out(`$ kubectl create deployment ${name} --replicas=${$('#na-rep').value} (cpu ${$('#na-cpu').value}m)`, 'c');
+  out(createDep(name, +$('#na-rep').value, +$('#na-cpu').value), dep(name) ? 'g' : 'r');
+  $('#na-name').value = '';
+});
+function createDep(name, rep, cpu) {
+  if (!/^[a-z][a-z0-9-]{0,11}$/.test(name)) return 'error: name must match [a-z][a-z0-9-]{0,11}';
+  if (dep(name)) return `Error from server (AlreadyExists): deployments.apps "${name}" already exists`;
+  if (S.deps.length >= 6) return 'error: 沙盤最多 6 支部隊，先 delete 一支吧';
+  const used = new Set(S.deps.map(d => d.col)); let col = 0; while (used.has(col)) col++;
+  S.deps.push({ name, col, cpu: cpu || 250, replicas: Math.max(1, Math.min(12, rep || 1)) });
+  event('Normal', 'ScalingReplicaSet', `deployment/${name}`, `Scaled up replica set ${name} to ${rep}`);
+  renderArmies(); return `deployment.apps/${name} created`;
+}
+
+// map clicks
+canvas.addEventListener('click', e => {
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+  let best = -1, bd = 1e9;
+  S.nodes.forEach((n, i) => { const d = Math.hypot(n.x - x, n.y - 6 - y); if (d < bd) { bd = d; best = i; } });
+  if (bd < 18) { selected = best; nodeSig = ''; renderNode(); blip(740, 0.04); }
+});
+
+$('#o-strike').addEventListener('click', () => {
+  let i = selected;
+  if (!S.nodes[i].active || !S.nodes[i].ready) {
+    const cands = S.nodes.map((n, k) => k).filter(k => S.nodes[k].active && S.nodes[k].ready);
+    if (!cands.length) return; i = cands[Math.random() * cands.length | 0]; selected = i;
+  }
+  strike(i);
+});
+$('#o-surge').addEventListener('click', surge);
+$('#o-expand').addEventListener('click', () => { if (!expand()) out('所有城址都已建城（最多 6 個 worker）。', 'y'); });
+$('#o-netpol').addEventListener('click', () => setNetpol(!S.netpol));
+$('#o-reset').addEventListener('click', () => { S = freshState(); evRows.length = 0; renderEvents(); renderArmies(); setNetpol(false); selected = 1; nodeSig = ''; renderNode(); out('# 戰局已重置', 'm'); });
+
+// ---------- kubectl console ----------
+const outEl = $('#out');
+function out(text, cls = 'c') {
+  const s = document.createElement('span'); s.className = cls; s.textContent = text + '\n';
+  outEl.appendChild(s);
+  while (outEl.childNodes.length > 400) outEl.removeChild(outEl.firstChild);
+  outEl.scrollTop = outEl.scrollHeight;
+}
+function table(rows) {
+  const w = rows[0].map((_, c) => Math.max(...rows.map(r => String(r[c]).length)));
+  return rows.map(r => r.map((v, c) => String(v).padEnd(w[c] + 3)).join('').trimEnd()).join('\n');
+}
+function findNode(name) { return S.nodes.findIndex(n => n.id === name && n.active); }
+const HELP = `可用指令（kubectl 或 oc 皆可）：
+  get pods [-o wide] | get nodes | get deploy | get hpa | get events
+  scale deploy/<name> --replicas=<n>
+  create deployment <name> [--replicas=<n>] [--cpu=<m>]
+  delete deploy <name> | delete pod <name>
+  cordon <node> | uncordon <node> | drain <node>
+  describe node <node>
+  chaos kill <node> | chaos revive <node>     (沙盤專用)
+  apply -f netpol.yaml | delete netpol db-allow-api
+  clear | help`;
+function run(line) {
+  const raw = line.trim(); if (!raw) return;
+  out('$ ' + raw, 'c');
+  let a = raw.split(/\s+/);
+  if (a[0] === 'clear') { outEl.textContent = ''; return; }
+  if (a[0] === 'help') { out(HELP, 'm'); return; }
+  if (a[0] === 'chaos') {
+    const i = findNode(a[2]);
+    if (i < 0) return out(`error: node "${a[2] || ''}" not found`, 'r');
+    if (a[1] === 'kill') return out(strike(i) ? `node/${a[2]} 遭到雷擊` : `node/${a[2]} 已經是 NotReady`, strike ? 'r' : 'y');
+    if (a[1] === 'revive') return out(revive(i) ? `node/${a[2]} 重建完成` : `node/${a[2]} 本來就是 Ready`, 'g');
+    return out('usage: chaos kill|revive <node>', 'r');
+  }
+  if (a[0] !== 'kubectl' && a[0] !== 'oc' && a[0] !== 'k') return out(`bash: ${a[0]}: command not found（試試 help）`, 'r');
+  a = a.slice(1);
+  const verb = a[0], res = (a[1] || '').toLowerCase();
+  const wide = raw.includes('-o wide');
+  const flag = (k) => { const m = raw.match(new RegExp(`--${k}[= ](\\S+)`)); return m && m[1]; };
+  const isDep = r => ['deploy', 'deployment', 'deployments', 'deploy.apps'].includes(r);
+  if (verb === 'get') {
+    if (['pods', 'pod', 'po'].includes(res)) {
+      if (!S.pods.length) return out('No resources found in empire namespace.', 'm');
+      const rows = [wide ? ['NAME', 'READY', 'STATUS', 'AGE', 'NODE'] : ['NAME', 'READY', 'STATUS', 'AGE']];
+      S.pods.forEach(p => {
+        const st = p.phase === 'Marching' ? 'ContainerCreating' : p.phase;
+        const r = [p.name, p.phase === 'Running' ? '1/1' : '0/1', st, age(p.created)];
+        if (wide) r.push(p.node === null ? '<none>' : S.nodes[p.node].id);
+        rows.push(r);
+      });
+      return out(table(rows), 'g');
+    }
+    if (['nodes', 'node', 'no'].includes(res)) {
+      const rows = [['NAME', 'STATUS', 'ROLES', 'CPU-REQ']];
+      rows.push(['control-plane', 'Ready', 'control-plane', '-']);
+      S.nodes.filter(n => n.active).forEach(n => { const i = S.nodes.indexOf(n); rows.push([n.id, !n.ready ? 'NotReady' : n.cordoned ? 'Ready,SchedulingDisabled' : 'Ready', 'worker', Math.round(usedCpu(i) / CAP * 100) + '%']); });
+      return out(table(rows), 'g');
+    }
+    if (isDep(res)) {
+      const rows = [['NAME', 'READY', 'UP-TO-DATE', 'AVAILABLE']];
+      S.deps.forEach(d => { const r = S.pods.filter(p => p.dep === d.name && p.phase === 'Running').length; rows.push([d.name, `${r}/${d.replicas}`, d.replicas, r]); });
+      return out(table(rows), 'g');
+    }
+    if (res === 'hpa') {
+      const d = dep('web'); if (!d || !d.hpa) return out('No resources found in empire namespace.', 'm');
+      return out(table([['NAME', 'REFERENCE', 'TARGETS', 'MINPODS', 'MAXPODS', 'REPLICAS'], ['web', 'Deployment/web', `cpu: ${d.util ?? 37}%/60%`, d.hpa.min, d.hpa.max, d.replicas]]), 'g');
+    }
+    if (['events', 'ev'].includes(res)) {
+      if (!evRows.length) return out('No events found.', 'm');
+      return out(table([['AGE', 'TYPE', 'REASON', 'OBJECT'], ...evRows.slice(0, 12).map(e => [age(e.t), e.type, e.reason, e.obj])]), 'g');
+    }
+    if (['networkpolicy', 'netpol', 'networkpolicies'].includes(res)) {
+      return out(S.netpol ? table([['NAME', 'POD-SELECTOR', 'AGE'], ['db-allow-api', 'app=db', '-']]) : 'No resources found in empire namespace.', S.netpol ? 'g' : 'm');
+    }
+    return out(`error: the server doesn't have a resource type "${a[1] || ''}"`, 'r');
+  }
+  if (verb === 'scale') {
+    let name = a[1] || ''; if (name.includes('/')) name = name.split('/')[1]; else if (isDep(name)) name = a[2];
+    const n = parseInt(flag('replicas'), 10); const d = dep(name);
+    if (!d) return out(`Error from server (NotFound): deployments.apps "${name || ''}" not found`, 'r');
+    if (isNaN(n) || n < 0 || n > 12) return out('error: --replicas 需介於 0~12', 'r');
+    d.replicas = n; renderArmies();
+    event('Normal', 'ScalingReplicaSet', `deployment/${d.name}`, `Scaled replica set ${d.name} to ${n}`);
+    return out(`deployment.apps/${d.name} scaled`, 'g');
+  }
+  if (verb === 'create' && (isDep(res))) {
+    const name = a[2]; const r = createDep(name, parseInt(flag('replicas') || '1', 10), parseInt((flag('cpu') || '250').replace('m', ''), 10));
+    return out(r, r.endsWith('created') ? 'g' : 'r');
+  }
+  if (verb === 'delete') {
+    if (isDep(res)) { const d = dep(a[2]); if (!d) return out(`Error from server (NotFound): deployments.apps "${a[2] || ''}" not found`, 'r'); S.deps = S.deps.filter(x => x !== d); renderArmies(); return out(`deployment.apps "${d.name}" deleted`, 'g'); }
+    if (['pod', 'pods', 'po'].includes(res)) { const p = S.pods.find(x => x.name === a[2] && x.phase !== 'Terminating'); if (!p) return out(`Error from server (NotFound): pods "${a[2] || ''}" not found`, 'r'); terminate(p, 'Killing'); return out(`pod "${p.name}" deleted`, 'g'); }
+    if (['netpol', 'networkpolicy'].includes(res)) { if (S.netpol) setNetpol(false); return out('networkpolicy.networking.k8s.io "db-allow-api" deleted', 'g'); }
+    if (['node', 'nodes'].includes(res)) return out('沙盤不支援刪除節點，改用 drain 或 chaos kill', 'y');
+    return out(`error: the server doesn't have a resource type "${a[1] || ''}"`, 'r');
+  }
+  if (verb === 'apply') { if (/netpol/.test(raw)) { if (!S.netpol) setNetpol(true); return out('networkpolicy.networking.k8s.io/db-allow-api created', 'g'); } return out('error: 沙盤只認得 -f netpol.yaml', 'r'); }
+  if (['cordon', 'uncordon', 'drain'].includes(verb)) {
+    const i = findNode(a[1]); if (i < 0) return out(`Error from server (NotFound): nodes "${a[1] || ''}" not found`, 'r');
+    selected = i; nodeSig = '';
+    if (verb === 'cordon') { cordon(i, true); return out(`node/${a[1]} cordoned`, 'g'); }
+    if (verb === 'uncordon') { cordon(i, false); return out(`node/${a[1]} uncordoned`, 'g'); }
+    const pods = liveOn(i); drain(i);
+    out(`node/${a[1]} cordoned`, 'g'); pods.forEach(p => out(`evicting pod empire/${p.name}`, 'y'));
+    return out(`node/${a[1]} drained`, 'g');
+  }
+  if (verb === 'describe' && ['node', 'nodes', 'no'].includes(res)) {
+    const i = findNode(a[2]); if (i < 0) return out(`Error from server (NotFound): nodes "${a[2] || ''}" not found`, 'r');
+    const n = S.nodes[i];
+    return out(`Name:          ${n.id}\nRoles:         worker\nUnschedulable: ${n.cordoned}\nConditions:\n  Ready        ${n.ready ? 'True ' : 'Unknown'}  ${n.ready ? 'KubeletReady' : 'NodeStatusUnknown'}\nAllocated resources:\n  cpu          ${usedCpu(i)}m (${Math.round(usedCpu(i) / CAP * 100)}%)\nNon-terminated Pods: (${liveOn(i).length} in total)\n` + liveOn(i).map(p => `  empire  ${p.name}  ${dep(p.dep)?.cpu}m`).join('\n'), 'g');
+  }
+  out(`error: unknown command "${a.join(' ')}" — 輸入 help`, 'r');
+}
+const hist = []; let hi = 0;
+$('#cmdform').addEventListener('submit', e => { e.preventDefault(); const v = $('#cmd').value; if (v.trim()) { hist.push(v); hi = hist.length; } $('#cmd').value = ''; run(v); });
+$('#cmd').addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp' && hist.length) { hi = Math.max(0, hi - 1); $('#cmd').value = hist[hi]; e.preventDefault(); }
+  if (e.key === 'ArrowDown' && hist.length) { hi = Math.min(hist.length, hi + 1); $('#cmd').value = hist[hi] || ''; e.preventDefault(); }
+});
+const CHIPS = ['kubectl get pods -o wide', 'kubectl scale deploy/api --replicas=6', 'kubectl drain worker-1', 'oc get nodes', 'kubectl create deployment cache --replicas=4 --cpu=1000m', 'kubectl apply -f netpol.yaml', 'chaos kill worker-2', 'kubectl get hpa'];
+$('#chips').innerHTML = CHIPS.map(c => `<button type="button">${c}</button>`).join('');
+$('#chips').addEventListener('click', e => { const b = e.target.closest('button'); if (b) run(b.textContent); });
+
+// sizing
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(320, Math.round(r.width * dpr / W) * W);
+  canvas.width = w; canvas.height = Math.round(w * 9 / 16);
+}
+new ResizeObserver(resize).observe(canvas);
+
+// boot: open in a working state, pods already garrisoned
+S = freshState();
+(function prefill() {
+  S.deps.forEach(d => { for (let k = 0; k < d.replicas; k++) createPod(d); });
+  for (let k = 0; k < 30; k++) scheduleOne();
+  S.pods.forEach(p => { if (p.phase === 'Marching') { p.phase = 'Running'; p.created = now - 60; p.started = now; } });
+  evRows.length = 0;
+  event('Normal', 'Synced', 'cluster/empire', '9 pods garrisoned across 4 worker nodes · type help in the console');
+})();
+renderArmies(); renderNode(); resize();
+out('# Cluster Conquest kubectl 沙盤。輸入 help 看指令，或點下方的快捷指令。', 'm');
+run('kubectl get nodes');
+requestAnimationFrame(t => { last = t; requestAnimationFrame(tick); });
+})();
+</script>
+
+</body></html>
